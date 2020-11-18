@@ -329,6 +329,7 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 
 	// Find the size parameter B which will hold the requested # of elements.
 	// For hint < 0 overLoadFactor returns false since hint < bucketCnt.
+	// 按照提供的元素个数，找一个可以放得下这么多元素的 B 值
 	B := uint8(0)
 	for overLoadFactor(hint, B) {
 		B++
@@ -338,6 +339,9 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 	// allocate initial hash table
 	// if B == 0, the buckets field is allocated lazily later (in mapassign)
 	// If hint is large zeroing this memory could take a while.
+	// 分配初始的 hash table
+	// 如果 B == 0，buckets 字段会由 mapassign 来 lazily 分配
+	// 因为如果 hint 很大的话，对这部分内存归零会花比较长时间
 	if h.B != 0 {
 		var nextOverflow *bmap
 		h.buckets, nextOverflow = makeBucketArray(t, h.B, nil)
@@ -356,6 +360,7 @@ func makemap(t *maptype, hint int, h *hmap) *hmap {
 // allocated by makeBucketArray with the same t and b parameters.
 // If dirtyalloc is nil a new backing array will be alloced and
 // otherwise dirtyalloc will be cleared and reused as backing array.
+// bucket 底层数组
 func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets unsafe.Pointer, nextOverflow *bmap) {
 	base := bucketShift(b)
 	nbuckets := base
@@ -365,6 +370,7 @@ func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets un
 		// Add on the estimated number of overflow buckets
 		// required to insert the median number of elements
 		// used with this value of b.
+
 		nbuckets += bucketShift(b - 4)
 		sz := t.bucket.size * nbuckets
 		up := roundupsize(sz)
@@ -373,6 +379,7 @@ func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets un
 		}
 	}
 
+	//你是不是傻逼了。
 	if dirtyalloc == nil {
 		buckets = newarray(t.bucket, int(nbuckets))
 	} else {
@@ -474,6 +481,7 @@ func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) 
 	if msanenabled && h != nil {
 		msanread(key, t.key.size)
 	}
+	//map 是空的
 	if h == nil || h.count == 0 {
 		if t.hashMightPanic() {
 			t.hasher(key, 0) // see issue 23734
@@ -483,12 +491,17 @@ func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) 
 	if h.flags&hashWriting != 0 {
 		throw("concurrent map read and map write")
 	}
+	// 不同类型的 key，所用的 hash 算法是不一样的
+	// 具体可以参考 algarray
 	hash := t.hasher(key, uintptr(h.hash0))
+	// 如果 B = 3，那么结果用二进制表示就是 111
+	// 如果 B = 4，那么结果用二进制表示就是 1111
 	m := bucketMask(h.B)
 	b := (*bmap)(unsafe.Pointer(uintptr(h.buckets) + (hash&m)*uintptr(t.bucketsize)))
-	if c := h.oldbuckets; c != nil {
+	if c := h.oldbuckets; c != nil { //  正在扩容
 		if !h.sameSizeGrow() {
 			// There used to be half as many buckets; mask down one more power of two.
+			// 说明之前只有一半的 bucket，需要除 2
 			m >>= 1
 		}
 		oldb := (*bmap)(unsafe.Pointer(uintptr(c) + (hash&m)*uintptr(t.bucketsize)))
@@ -496,8 +509,12 @@ func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) 
 			b = oldb
 		}
 	}
+	// top hash
 	top := tophash(hash)
 bucketloop:
+	// 一个 bucket 在存储满 8 个元素后，就再也放不下了
+	// 这时候会创建新的 bucket
+	// 挂在原来的 bucket 的 overflow 指针成员上
 	for ; b != nil; b = b.overflow(t) {
 		for i := uintptr(0); i < bucketCnt; i++ {
 			if b.tophash[i] != top {
@@ -519,6 +536,7 @@ bucketloop:
 			}
 		}
 	}
+	// 所有 bucket 都没有找到，返回零值和 false
 	return unsafe.Pointer(&zeroVal[0]), false
 }
 
@@ -599,22 +617,30 @@ func mapassign(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
 	if h.flags&hashWriting != 0 {
 		throw("concurrent map writes")
 	}
+	// 调用对应类型的 hash 算法
 	hash := t.hasher(key, uintptr(h.hash0))
 
 	// Set hashWriting after calling t.hasher, since t.hasher may panic,
 	// in which case we have not actually done a write.
-	h.flags ^= hashWriting
+	h.flags ^= hashWriting //设置写标志
 
 	if h.buckets == nil {
+		// 分配第一个 buckt
 		h.buckets = newobject(t.bucket) // newarray(t.bucket, 1)
 	}
 
 again:
+	// 计算低 8 位 hash，根据计算出的 bucketMask 选择对应的 bucket
+	// mask : 1111111
 	bucket := hash & bucketMask(h.B)
 	if h.growing() {
 		growWork(t, h, bucket)
 	}
+	// 计算出存储的 bucket 的内存位置
+	// pos = start + bucketNumber * bucetsize
+	// 这里的命名不太好，bucket 其实是 bucketNumber
 	b := (*bmap)(add(h.buckets, bucket*uintptr(t.bucketsize)))
+	// 计算高 8 位 hash
 	top := tophash(hash)
 
 	var inserti *uint8
@@ -623,8 +649,12 @@ again:
 bucketloop:
 	for {
 		for i := uintptr(0); i < bucketCnt; i++ {
+			// 遍历 8 个 bucket 中的元素
+			// 这里的 bucketCnt 是全局常量
+			// 其实叫 bucketElemCnt 更合适
 			if b.tophash[i] != top {
 				if isEmpty(b.tophash[i]) && inserti == nil {
+					// 如果这个槽位没有被占，说明可以往这里塞 key 和 value
 					inserti = &b.tophash[i]
 					insertk = add(unsafe.Pointer(b), dataOffset+i*uintptr(t.keysize))
 					elem = add(unsafe.Pointer(b), dataOffset+bucketCnt*uintptr(t.keysize)+i*uintptr(t.elemsize))
@@ -638,9 +668,13 @@ bucketloop:
 			if t.indirectkey() {
 				k = *((*unsafe.Pointer)(k))
 			}
+			// 如果相同的 hash 位置的 key 和要插入的 key 字面上不相等
+			// 如果两个 key 的首八位后最后八位哈希值一样，就会进行其值比较
+			// 算是一种哈希碰撞吧
 			if !t.key.equal(key, k) {
 				continue
 			}
+			// 对应的位置已经有 key 了，直接更新就行
 			// already have a mapping for key. Update it.
 			if t.needkeyupdate() {
 				typedmemmove(t.key, k, key)
@@ -648,10 +682,13 @@ bucketloop:
 			elem = add(unsafe.Pointer(b), dataOffset+bucketCnt*uintptr(t.keysize)+i*uintptr(t.elemsize))
 			goto done
 		}
+		// bucket 的 8 个槽没有满足条件的能插入或者能更新的，去 overflow 里继续找
 		ovf := b.overflow(t)
+		// 如果 overflow 为 nil，说明到了 overflow 链表的末端了
 		if ovf == nil {
 			break
 		}
+		// 赋值为链表的下一个元素，继续循环
 		b = ovf
 	}
 
@@ -659,12 +696,22 @@ bucketloop:
 
 	// If we hit the max load factor or we have too many overflow buckets,
 	// and we're not already in the middle of growing, start growing.
+
+	// 没有找到 key，分配新的空间
+
+	// 如果触发了最大的 load factor，或者已经有太多 overflow buckets
+	// 并且这个时刻没有在进行 growing 的途中，那么就开始 growing
 	if !h.growing() && (overLoadFactor(h.count+1, h.B) || tooManyOverflowBuckets(h.noverflow, h.B)) {
 		hashGrow(t, h)
+		// hashGrow 的时候会把当前的 bucket 放到 oldbucket 里
+		// 但还没有开始分配新的 bucket，所以需要到 again 重试一次
+		// 重试的时候在 growWork 里会把这个 key 的 bucket 优先分配好
 		goto again // Growing the table invalidates everything, so try again
 	}
 
 	if inserti == nil {
+		// 前面在桶里找的时候，没有找到能塞这个 tophash 的位置
+		// 说明当前所有 buckets 都是满的，分配一个新的 bucket
 		// The current bucket and all the overflow buckets connected to it are full, allocate a new one.
 		newb := h.newoverflow(t, b)
 		inserti = &newb.tophash[0]
@@ -673,6 +720,7 @@ bucketloop:
 	}
 
 	// store new key/elem at insert position
+	// 把新的 key 和 value 存储到应插入的位置
 	if t.indirectkey() {
 		kmem := newobject(t.key)
 		*(*unsafe.Pointer)(insertk) = kmem
@@ -1038,10 +1086,13 @@ func mapclear(t *maptype, h *hmap) {
 	h.flags &^= hashWriting
 }
 
+// 扩容函数
 func hashGrow(t *maptype, h *hmap) {
 	// If we've hit the load factor, get bigger.
 	// Otherwise, there are too many overflow buckets,
 	// so keep the same number of buckets and "grow" laterally.
+	// 如果已经超过了 load factor 的阈值，那么需要对 map 进行扩容，即 B = B + 1，bucket 总数会变为原来的二倍
+	// 如果还没到阈值，那么只需要保持相同数量的 bucket，横向拍平就行了
 	bigger := uint8(1)
 	if !overLoadFactor(h.count+1, h.B) {
 		bigger = 0
@@ -1055,6 +1106,7 @@ func hashGrow(t *maptype, h *hmap) {
 		flags |= oldIterator
 	}
 	// commit the grow (atomic wrt gc)
+	// 提交扩容结果
 	h.B += bigger
 	h.flags = flags
 	h.oldbuckets = oldbuckets
@@ -1077,6 +1129,7 @@ func hashGrow(t *maptype, h *hmap) {
 		h.extra.nextOverflow = nextOverflow
 	}
 
+	// 实际的哈希表元素的拷贝工作是在 growWork 和 evacuate 中增量慢慢地进行的
 	// the actual copying of the hash table data is done incrementally
 	// by growWork() and evacuate().
 }

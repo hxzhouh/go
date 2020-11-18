@@ -1198,7 +1198,7 @@ opswitch:
 
 		n = mkcall1(chanfn(fnname, 1, n.Type), n.Type, init, typename(n.Type), conv(size, argtype))
 
-	case OMAKEMAP:
+	case OMAKEMAP: //编译器创建map
 		t := n.Type
 		hmapType := hmap(t)
 		hint := n.Left
