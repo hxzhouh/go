@@ -379,7 +379,6 @@ func makeBucketArray(t *maptype, b uint8, dirtyalloc unsafe.Pointer) (buckets un
 		}
 	}
 
-	//你是不是傻逼了。
 	if dirtyalloc == nil {
 		buckets = newarray(t.bucket, int(nbuckets))
 	} else {
