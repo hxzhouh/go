@@ -409,18 +409,18 @@ type g struct {
 	// stackguard1 is the stack pointer compared in the C stack growth prologue.
 	// It is stack.lo+StackGuard on g0 and gsignal stacks.
 	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
-	stack       stack   // offset known to runtime/cgo
+	stack       stack   // offset known to runtime/cgo // 栈内存：[stack.lo, stack.hi)
 	stackguard0 uintptr // offset known to liblink
 	stackguard1 uintptr // offset known to liblink
 
 	_panic       *_panic // innermost panic - offset known to liblink
 	_defer       *_defer // innermost defer
-	m            *m      // current m; offset known to arm liblink
+	m            *m      // current m; offset known to arm liblink // 当前的 m
 	sched        gobuf
 	syscallsp    uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
 	syscallpc    uintptr        // if status==Gsyscall, syscallpc = sched.pc to use during gc
-	stktopsp     uintptr        // expected sp at top of stack, to check in traceback
-	param        unsafe.Pointer // passed parameter on wakeup
+	stktopsp     uintptr        // expected sp at top of stack, to check in traceback // 期望 sp 位于栈顶，用于回溯检查
+	param        unsafe.Pointer // passed parameter on wakeup  // wakeup 唤醒时候传递的参数
 	atomicstatus uint32
 	stackLock    uint32 // sigprof/scang lock; TODO: fold in to atomicstatus
 	goid         int64
@@ -428,7 +428,7 @@ type g struct {
 	waitsince    int64      // approx time when the g become blocked
 	waitreason   waitReason // if status==Gwaiting
 
-	preempt       bool // preemption signal, duplicates stackguard0 = stackpreempt
+	preempt       bool // preemption signal, duplicates stackguard0 = stackpreempt // 抢占信号，stackguard0 = stackpreempt 的副本
 	preemptStop   bool // transition to _Gpreempted on preemption; otherwise, just deschedule
 	preemptShrink bool // shrink stack at synchronous safe point
 
@@ -468,7 +468,7 @@ type g struct {
 	waiting        *sudog         // sudog structures this g is waiting on (that have a valid elem ptr); in lock order
 	cgoCtxt        []uintptr      // cgo traceback context
 	labels         unsafe.Pointer // profiler labels
-	timer          *timer         // cached timer for time.Sleep
+	timer          *timer         // cached timer for time.Sleep  // 为 time.Sleep 缓存的计时器
 	selectDone     uint32         // are we participating in a select and did someone win the race?
 
 	// Per-G GC state
@@ -484,20 +484,20 @@ type g struct {
 }
 
 type m struct {
-	g0      *g     // goroutine with scheduling stack
+	g0      *g     // goroutine with scheduling stack // 用于执行调度指令的 Goroutine
 	morebuf gobuf  // gobuf arg to morestack
 	divmod  uint32 // div/mod denominator for arm - known to liblink
 
 	// Fields not known to debuggers.
 	procid        uint64       // for debuggers, but offset not hard-coded
-	gsignal       *g           // signal-handling g
+	gsignal       *g           // signal-handling g // 处理 signal 的 g
 	goSigStack    gsignalStack // Go-allocated signal handling stack
 	sigmask       sigset       // storage for saved signal mask
 	tls           [6]uintptr   // thread-local storage (for x86 extern register)
 	mstartfn      func()
-	curg          *g       // current running goroutine
+	curg          *g       // current running goroutine // 当前运行的用户 Goroutine
 	caughtsig     guintptr // goroutine running during fatal signal
-	p             puintptr // attached p for executing go code (nil if not executing go code)
+	p             puintptr // attached p for executing go code (nil if not executing go code) // 执行 go 代码时持有的 p (如果没有执行则为 nil)
 	nextp         puintptr
 	oldp          puintptr // the p that was attached before executing a syscall
 	id            int64
@@ -580,13 +580,13 @@ type p struct {
 	schedtick   uint32     // incremented on every scheduler call
 	syscalltick uint32     // incremented on every system call
 	sysmontick  sysmontick // last tick observed by sysmon
-	m           muintptr   // back-link to associated m (nil if idle)
+	m           muintptr   // back-link to associated m (nil if idle) // 反向链接到关联的 m （nil 则表示 idle）
 	mcache      *mcache
 	pcache      pageCache
 	raceprocctx uintptr
 
-	deferpool    [5][]*_defer // pool of available defer structs of different sizes (see panic.go)
-	deferpoolbuf [5][32]*_defer
+	deferpool    [5][]*_defer   // pool of available defer structs of different sizes (see panic.go) // 不同大小的可用的 defer 结构池
+	deferpoolbuf [5][32]*_defer // 可运行的 Goroutine 队列，可无锁访问
 
 	// Cache of goroutine ids, amortizes accesses to runtime·sched.goidgen.
 	goidcache    uint64
@@ -737,13 +737,13 @@ type schedt struct {
 
 	ngsys uint32 // number of system goroutines; updated atomically
 
-	pidle      puintptr // idle p's
-	npidle     uint32
-	nmspinning uint32 // See "Worker thread parking/unparking" comment in proc.go.
+	pidle      puintptr // idle p's // 空闲 p 链表 沒有跟 m 绑定
+	npidle     uint32   // 空闲 p 数量
+	nmspinning uint32   // See "Worker thread parking/unparking" comment in proc.go. // 自旋状态的 M 的数量
 
 	// Global runnable queue.
-	runq     gQueue
-	runqsize int32
+	runq     gQueue //  全局 runnable G 队列
+	runqsize int32  // 全局 runable G 大小
 
 	// disable controls selective disabling of the scheduler.
 	//
@@ -758,19 +758,19 @@ type schedt struct {
 	}
 
 	// Global cache of dead G's.
-	gFree struct {
+	gFree struct { // 有效 dead G 的全局缓存.
 		lock    mutex
-		stack   gList // Gs with stacks
-		noStack gList // Gs without stacks
+		stack   gList // Gs with stacks // 包含栈的 Gs
+		noStack gList // Gs without stacks // 没有栈的 Gs
 		n       int32
 	}
 
 	// Central cache of sudog structs.
-	sudoglock  mutex
+	sudoglock  mutex // sudog 结构的集中缓存
 	sudogcache *sudog
 
 	// Central pool of available defer structs of different sizes.
-	deferlock mutex
+	deferlock mutex // 不同大小的有效的 defer 结构的池
 	deferpool [5]*_defer
 
 	// freem is the list of m's waiting to be freed when their
@@ -1053,7 +1053,7 @@ func (w waitReason) String() string {
 
 var (
 	allglen    uintptr
-	allm       *m
+	allm       *m // m 资源池,
 	gomaxprocs int32
 	ncpu       int32
 	forcegc    forcegcstate

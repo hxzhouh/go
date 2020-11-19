@@ -597,13 +597,13 @@ func schedinit() {
 	moduledataverify()
 	stackinit()
 	mallocinit()
-	fastrandinit() // must run before mcommoninit
-	mcommoninit(_g_.m, -1)
-	cpuinit()       // must run before alginit
-	alginit()       // maps must not be used before this call
-	modulesinit()   // provides activeModules
-	typelinksinit() // uses maps, activeModules
-	itabsinit()     // uses activeModules
+	fastrandinit()         // must run before mcommoninit
+	mcommoninit(_g_.m, -1) //初始化 m
+	cpuinit()              // must run before alginit
+	alginit()              // maps must not be used before this call
+	modulesinit()          // provides activeModules
+	typelinksinit()        // uses maps, activeModules
+	itabsinit()            // uses activeModules
 
 	sigsave(&_g_.m.sigmask)
 	initSigmask = _g_.m.sigmask
@@ -619,7 +619,7 @@ func schedinit() {
 	if n, ok := atoi32(gogetenv("GOMAXPROCS")); ok && n > 0 {
 		procs = n
 	}
-	if procresize(procs) != nil {
+	if procresize(procs) != nil { // 初始化 p
 		throw("unknown runnable goroutine during bootstrap")
 	}
 	unlock(&sched.lock)
