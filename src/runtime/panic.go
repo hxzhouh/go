@@ -883,6 +883,7 @@ func reflectcallSave(p *_panic, fn, arg unsafe.Pointer, argsize uint32) {
 
 // The implementation of the predeclared function panic.
 func gopanic(e interface{}) {
+	// 获取当前G
 	gp := getg()
 	if gp.m.curg != gp {
 		print("panic: ")

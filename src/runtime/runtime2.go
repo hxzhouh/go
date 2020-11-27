@@ -410,8 +410,8 @@ type g struct {
 	// It is stack.lo+StackGuard on g0 and gsignal stacks.
 	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
 	stack       stack   // offset known to runtime/cgo // 栈内存：[stack.lo, stack.hi)
-	stackguard0 uintptr // offset known to liblink
-	stackguard1 uintptr // offset known to liblink
+	stackguard0 uintptr // offset known to liblink go 的堆栈指针？
+	stackguard1 uintptr // offset known to liblink cgo 的堆栈指针？
 
 	_panic       *_panic // innermost panic - offset known to liblink
 	_defer       *_defer // innermost defer
