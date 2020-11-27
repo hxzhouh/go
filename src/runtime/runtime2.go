@@ -489,24 +489,26 @@ type m struct {
 	divmod  uint32 // div/mod denominator for arm - known to liblink
 
 	// Fields not known to debuggers.
-	procid        uint64       // for debuggers, but offset not hard-coded
-	gsignal       *g           // signal-handling g // 处理 signal 的 g
-	goSigStack    gsignalStack // Go-allocated signal handling stack
-	sigmask       sigset       // storage for saved signal mask
-	tls           [6]uintptr   // thread-local storage (for x86 extern register)
-	mstartfn      func()
-	curg          *g       // current running goroutine // 当前运行的用户 Goroutine
-	caughtsig     guintptr // goroutine running during fatal signal
-	p             puintptr // attached p for executing go code (nil if not executing go code) // 执行 go 代码时持有的 p (如果没有执行则为 nil)
-	nextp         puintptr
-	oldp          puintptr // the p that was attached before executing a syscall
-	id            int64
-	mallocing     int32
-	throwing      int32
-	preemptoff    string // if != "", keep curg running on this m
-	locks         int32
-	dying         int32
-	profilehz     int32
+	procid     uint64       // for debuggers, but offset not hard-coded
+	gsignal    *g           // signal-handling g // 处理 signal 的 g
+	goSigStack gsignalStack // Go-allocated signal handling stack
+	sigmask    sigset       // storage for saved signal mask
+	// 线程本地存储
+	tls        [6]uintptr // thread-local storage (for x86 extern register)
+	mstartfn   func()
+	curg       *g       // current running goroutine // 当前运行的用户 Goroutine
+	caughtsig  guintptr // goroutine running during fatal signal
+	p          puintptr // attached p for executing go code (nil if not executing go code) // 执行 go 代码时持有的 p (如果没有执行则为 nil)
+	nextp      puintptr
+	oldp       puintptr // the p that was attached before executing a syscall
+	id         int64
+	mallocing  int32
+	throwing   int32
+	preemptoff string // if != "", keep curg running on this m
+	locks      int32
+	dying      int32
+	profilehz  int32
+	// m 当前没有运行 work 且正处于寻找 work 的活跃状态
 	spinning      bool // m is out of work and is actively looking for work
 	blocked       bool // m is blocked on a note
 	newSigstack   bool // minit on C thread called sigaltstack
@@ -516,12 +518,14 @@ type m struct {
 	fastrand      [2]uint32
 	needextram    bool
 	traceback     uint8
-	ncgocall      uint64      // number of cgo calls in total
-	ncgo          int32       // number of cgo calls currently in progress
-	cgoCallersUse uint32      // if non-zero, cgoCallers in use temporarily
-	cgoCallers    *cgoCallers // cgo traceback if crashing in cgo call
-	doesPark      bool        // non-P running threads: sysmon and newmHandoff never use .park
-	park          note
+	ncgocall      uint64 // number of cgo calls in total
+	ncgo          int32  // number of cgo calls currently in progress
+	cgoCallersUse uint32 // if non-zero, cgoCallers in use temporarily
+	// cgo 调用崩溃的 cgo 回溯
+	cgoCallers *cgoCallers // cgo traceback if crashing in cgo call
+	doesPark   bool        // non-P running threads: sysmon and newmHandoff never use .park
+	park       note
+	// 在 allm 上
 	alllink       *m // on allm
 	schedlink     muintptr
 	lockedg       guintptr
