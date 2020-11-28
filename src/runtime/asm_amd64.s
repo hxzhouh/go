@@ -213,7 +213,7 @@ ok:
 	MOVQ	AX, 8(SP)
 	CALL	runtime·args(SB)
 	CALL	runtime·osinit(SB)
-	CALL	runtime·schedinit(SB)
+	CALL	runtime·schedinit(SB) // 初始化调度器
 
 	// create a new goroutine to start program
 	MOVQ	$runtime·mainPC(SB), AX		// entry
